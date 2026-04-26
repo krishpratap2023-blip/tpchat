@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TP Chat</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial;
+    background: #0f172a;
+    color: white;
+}
+
+/* Layout */
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+/* LEFT PANEL */
+.users {
+    width: 30%;
+    background: #020617;
+    padding: 10px;
+    overflow-y: auto;
+}
+
+.user {
+    padding: 12px;
+    border-bottom: 1px solid #1e293b;
+    cursor: pointer;
+    position: relative;
+}
+
+.user:hover {
+    background: #1e293b;
+}
+
+.status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.online { background: lime; }
+.offline { background: red; }
+
+/* RIGHT PANEL */
+.chat {
+    width: 70%;
+    display: flex;
+    flex-direction: column;
+}
+
+.messages {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+}
+
+.message {
+    margin: 6px 0;
+}
+
+.me {
+    text-align: right;
+    color: #38bdf8;
+}
+
+/* INPUT */
+.input-area {
+    display: flex;
+    padding: 10px;
+    background: #020617;
+}
+
+input {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    outline: none;
+}
+
+button {
+    padding: 10px 15px;
+    background: #38bdf8;
+    border: none;
+    cursor: pointer;
+}
+
+/* LOGIN */
+.login {
+    display: flex;
+    flex-direction: column;
+    width: 280px;
+    margin: 120px auto;
+    gap: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="app"></div>
+
+<script>
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, setDoc } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB3jcisM-1xfoDiiYYmZpCu_uQanUk2wuo",
+  authDomain: "tp-chat-42f08.firebaseapp.com",
+  projectId: "tp-chat-42f08",
+  storageBucket: "tp-chat-42f08.firebasestorage.app",
+  messagingSenderId: "465448517955",
+  appId: "1:465448517955:web:d5c09f33a4823ab76a6ff6",
+  measurementId: "G-7QY1FBDVYB"
+};
+
+// INIT
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+// ===== STORAGE =====
+let users = JSON.parse(localStorage.getItem("users")) || [];
+let chats = JSON.parse(localStorage.getItem("chats")) || {};
+let currentUser = JSON.parse(localStorage.getItem("currentUser"));
+let selectedUser = null;
+
+// ===== SAVE =====
+function save() {
+    localStorage.setItem("users", JSON.stringify(users));
+    localStorage.setItem("chats", JSON.stringify(chats));
+    localStorage.setItem("currentUser", JSON.stringify(currentUser));
+}
+
+// ===== LOGIN =====
+function showLogin() {
+    document.getElementById("app").innerHTML = `
+        <div class="login">
+            <h2>TP Chat</h2>
+            <input id="username" placeholder="Username">
+            <input id="age" placeholder="Age">
+            <input id="country" placeholder="Country">
+            <button onclick="login()">Join</button>
+        </div>
+    `;
+}
+
+function login() {
+    let username = document.getElementById("username").value.trim();
+    let age = document.getElementById("age").value;
+    let country = document.getElementById("country").value;
+
+    if (!username) return alert("Enter username");
+
+    currentUser = { username, age, country };
+
+    if (!users.find(u => u.username === username)) {
+        users.push(currentUser);
+    }
+
+    save();
+    showApp();
+}
+
+// ===== APP UI =====
+function showApp() {
+    document.getElementById("app").innerHTML = `
+        <div class="container">
+            
+            <div class="users" id="usersList"></div>
+
+            <div class="chat">
+                <div class="messages" id="messages">
+                    <p>Select a user to start chatting</p>
+                </div>
+                <div class="input-area">
+                    <input id="msgInput" placeholder="Type message...">
+                    <button onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+
+        </div>
+    `;
+
+    renderUsers();
+}
+
+// ===== USERS LIST =====
+function renderUsers() {
+    let list = document.getElementById("usersList");
+    list.innerHTML = "<h3>Users</h3>";
+
+    users.forEach(user => {
+        if (user.username === currentUser.username) return;
+
+        let div = document.createElement("div");
+        div.className = "user";
+
+        let status = Math.random() > 0.5 ? "online" : "offline";
+
+        div.innerHTML = `
+            ${user.username}
+            <div class="status ${status}"></div>
+        `;
+
+        div.onclick = () => {
+            selectedUser = user.username;
+            renderMessages();
+        };
+
+        list.appendChild(div);
+    });
+}
+
+// ===== CHAT KEY =====
+function getChatKey(u1, u2) {
+    return [u1, u2].sort().join("_");
+}
+
+// ===== RENDER MESSAGES =====
+function renderMessages() {
+    let box = document.getElementById("messages");
+    let key = getChatKey(currentUser.username, selectedUser);
+    let msgs = chats[key] || [];
+
+    box.innerHTML = "";
+
+    msgs.forEach(m => {
+        let div = document.createElement("div");
+        div.className = "message " + (m.sender === currentUser.username ? "me" : "");
+        div.textContent = m.sender + ": " + m.text;
+        box.appendChild(div);
+    });
+
+    box.scrollTop = box.scrollHeight;
+}
+
+// ===== SEND =====
+function sendMessage() {
+    let input = document.getElementById("msgInput");
+    let text = input.value.trim();
+
+    if (!text || !selectedUser) return;
+
+    let key = getChatKey(currentUser.username, selectedUser);
+
+    if (!chats[key]) chats[key] = [];
+
+    chats[key].push({
+        sender: currentUser.username,
+        text: text
+    });
+
+    input.value = "";
+    save();
+    renderMessages();
+}
+
+// ===== AUTO LOGIN =====
+if (currentUser) {
+    showApp();
+} else {
+    showLogin();
+}
+
+</script>
+
+</body>
+</html>
