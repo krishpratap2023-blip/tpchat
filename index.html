@@ -128,7 +128,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 // ===== STORAGE =====
-let users = JSON.parse(localStorage.getItem("users")) || [];
 let chats = JSON.parse(localStorage.getItem("chats")) || {};
 let currentUser = JSON.parse(localStorage.getItem("currentUser"));
 let selectedUser = null;
@@ -165,7 +164,13 @@ function login() {
     if (!users.find(u => u.username === username)) {
         users.push(currentUser);
     }
-
+    await setDoc(doc(db, "users", username), {
+        name: username,
+        age: age,
+        country: country,
+        online: true
+    });
+    localStorage.setItem("currentUser", JSON.stringify(currentUser));
     save();
     showApp();
 }
@@ -193,33 +198,34 @@ function showApp() {
     renderUsers();
 }
 
-// ===== USERS LIST =====
 function renderUsers() {
-    let list = document.getElementById("usersList");
-    list.innerHTML = "<h3>Users</h3>";
+    const list = document.getElementById("usersList");
 
-    users.forEach(user => {
-        if (user.username === currentUser.username) return;
+    onSnapshot(collection(db, "users"), (snapshot) => {
+        list.innerHTML = "<h3>Users</h3>";
 
-        let div = document.createElement("div");
-        div.className = "user";
+        snapshot.forEach(docSnap => {
+            let user = docSnap.data();
 
-        let status = Math.random() > 0.5 ? "online" : "offline";
+            if (user.name === currentUser.username) return;
 
-        div.innerHTML = `
-            ${user.username}
-            <div class="status ${status}"></div>
-        `;
+            let div = document.createElement("div");
+            div.className = "user";
 
-        div.onclick = () => {
-            selectedUser = user.username;
-            renderMessages();
-        };
+            div.innerHTML = `
+                ${user.name}
+                <div class="status online"></div>
+            `;
 
-        list.appendChild(div);
+            div.onclick = () => {
+                selectedUser = user.name;
+                renderMessages();
+            };
+
+            list.appendChild(div);
+        });
     });
 }
-
 // ===== CHAT KEY =====
 function getChatKey(u1, u2) {
     return [u1, u2].sort().join("_");
